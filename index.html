@@ -2,16 +2,17 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <title>Super Mario 64</title>
   <style>
-    :root { color-scheme: dark; --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-top: env(safe-area-inset-top, 0px); }
+    :root { color-scheme: dark; --safe-top: env(safe-area-inset-top, 0px); --safe-right: env(safe-area-inset-right, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px); }
     * { box-sizing: border-box; }
-    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-    body { position: fixed; inset: 0; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; }
-    #container { position: absolute; inset: 0; width: 100%; height: 100%; height: 100dvh; display: grid; place-items: center; background: #000; }
-    #canvas { display: block; width: 100%; height: 100%; touch-action: none; image-rendering: pixelated; outline: none; }
+    html, body { margin: 0; width: 100%; height: 100%; min-height: 100%; background: #000; }
+    body { min-height: 100vh; min-height: 100dvh; }
+    #container { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); display: grid; place-items: center; background: #000; }
+    #game-frame { position: relative; max-width: 100%; max-height: 100%; }
+    #canvas { display: block; width: 100%; height: 100%; touch-action: none; -webkit-user-select: none; user-select: none; image-rendering: pixelated; outline: none; }
     #touch-controls { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: .78; }
     .control { pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
     #stick { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: calc(max(18px, var(--safe-bottom)) + 10px); width: clamp(112px, 26vw, 154px); aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,.45); background: rgba(24,32,48,.38); box-shadow: inset 0 0 0 9px rgba(255,255,255,.06); }
@@ -34,19 +35,20 @@
       #stick { width: clamp(118px, 31vw, 158px); }
       #actions { width: clamp(150px, 39vw, 194px); }
     }
-    @media (orientation: landscape) and (max-height: 500px) {
-      #stick { width: min(25vh, 132px); left: max(12px, env(safe-area-inset-left)); bottom: calc(max(10px, var(--safe-bottom)) + 4px); }
-      #actions { height: 125px; right: max(12px, env(safe-area-inset-right)); bottom: calc(max(10px, var(--safe-bottom)) + 4px); }
-      .action[data-key="KeyX"] { bottom: 2px; }
-      .action[data-key="KeyC"] { bottom: 0; }
-      .action[data-key="Space"] { right: 48px; }
-      .action[data-key="Enter"] { left: 42px; top: 28px; }
+    @media (orientation: landscape) and (max-height: 560px) {
+      #stick { width: min(22vh, 92px); left: max(12px, env(safe-area-inset-left)); bottom: calc(max(10px, var(--safe-bottom)) + 4px); }
+      #actions { width: 148px; height: 108px; right: max(12px, env(safe-area-inset-right)); bottom: calc(max(10px, var(--safe-bottom)) + 4px); }
+      .action { width: 56px; font-size: 14px; }
+      .action[data-key="KeyX"] { width: 68px; bottom: 0; }
+      .action[data-key="KeyC"] { width: 56px; bottom: 0; }
+      .action[data-key="Space"] { width: 42px; right: 48px; }
+      .action[data-key="Enter"] { width: 38px; left: 42px; top: 23px; font-size: 9px; }
     }
   </style>
 </head>
 <body>
   <main id="container">
-    <canvas id="canvas" class="emscripten" width="1920" height="1080" tabindex="0"></canvas>
+    <div id="game-frame"><canvas id="canvas" class="emscripten" width="1920" height="1080" tabindex="0"></canvas></div>
   </main>
   <div id="touch-controls" aria-label="Controles táctiles">
     <div id="stick" class="control" role="application" aria-label="Joystick virtual"><div id="knob"></div></div>
@@ -70,6 +72,9 @@
     };
     (function () {
       var canvas = Module.canvas;
+      var container = document.getElementById('container');
+      var gameFrame = document.getElementById('game-frame');
+      var dispatchingCanvasResize = false;
       canvas.addEventListener('webglcontextlost', function(event) {
         alert('Se perdió el contexto gráfico. Recargá la página para continuar.');
         event.preventDefault();
@@ -156,18 +161,74 @@
           showScreenHint('Este navegador no permitió la pantalla completa.');
         }
       });
-      document.addEventListener('fullscreenchange', updateFullscreenButton);
-      document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
-      function resizeCanvas() {
-        var ratio = Math.min(window.devicePixelRatio || 1, 2);
-        var width = Math.max(1, Math.round(window.innerWidth * ratio));
-        var height = Math.max(1, Math.round(window.innerHeight * ratio));
-        if (canvas.width !== width) canvas.width = width;
-        if (canvas.height !== height) canvas.height = height;
+      function handleFullscreenChange() {
+        updateFullscreenButton();
+        scheduleViewportUpdate();
+        setTimeout(scheduleViewportUpdate, 250);
       }
-      window.addEventListener('resize', resizeCanvas, { passive: true });
-      window.addEventListener('orientationchange', function() { setTimeout(resizeCanvas, 250); }, { passive: true });
-      resizeCanvas();
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+      var baseGameAspect = 16 / 9;
+      var maxPanoramicAspect = 21 / 9;
+      function targetGameAspect(safeWidth, safeHeight) {
+        if (safeWidth <= safeHeight || safeHeight <= 0) return baseGameAspect;
+        var availableAspect = safeWidth / safeHeight;
+        if (availableAspect <= baseGameAspect) return baseGameAspect;
+        return Math.min(availableAspect, maxPanoramicAspect);
+      }
+      function resizeCanvasBuffer(width, height) {
+        var initialized = !!(Module.ctx || canvas.GLctxObject);
+        if (typeof Module.setCanvasSize === 'function') Module.setCanvasSize(width, height);
+        else { canvas.width = width; canvas.height = height; }
+        var gl = Module.ctx || (canvas.GLctxObject && canvas.GLctxObject.GLctx);
+        if (gl && typeof gl.viewport === 'function') gl.viewport(0, 0, width, height);
+        if (initialized) {
+          dispatchingCanvasResize = true;
+          try { window.dispatchEvent(new Event('resize')); }
+          finally { dispatchingCanvasResize = false; }
+        }
+      }
+      function updateGameViewport() {
+        var bounds = container.getBoundingClientRect();
+        var style = window.getComputedStyle(container);
+        var safeWidth = bounds.width - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+        var safeHeight = bounds.height - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
+        var aspect = targetGameAspect(safeWidth, safeHeight);
+        var displayWidth = Math.max(0, Math.min(safeWidth, safeHeight * aspect));
+        var displayHeight = displayWidth / aspect;
+        var pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        var renderWidth = Math.max(320, Math.min(1920, Math.round(displayWidth * pixelRatio)));
+        var renderHeight = Math.max(180, Math.round(renderWidth / aspect));
+        if (displayWidth > 0 && (canvas.width !== renderWidth || canvas.height !== renderHeight)) {
+          try {
+            resizeCanvasBuffer(renderWidth, renderHeight);
+          } catch (error) {
+            aspect = canvas.width / canvas.height || baseGameAspect;
+            displayWidth = Math.max(0, Math.min(safeWidth, safeHeight * aspect));
+            displayHeight = displayWidth / aspect;
+          }
+        }
+        if (canvas.width > 0 && canvas.height > 0) {
+          aspect = canvas.width / canvas.height;
+          displayWidth = Math.max(0, Math.min(safeWidth, safeHeight * aspect));
+          displayHeight = displayWidth / aspect;
+        }
+        gameFrame.style.width = displayWidth + 'px';
+        gameFrame.style.height = displayHeight + 'px';
+      }
+      function scheduleViewportUpdate() {
+        requestAnimationFrame(updateGameViewport);
+      }
+      window.addEventListener('resize', function() {
+        if (!dispatchingCanvasResize) scheduleViewportUpdate();
+      }, { passive: true });
+      window.addEventListener('orientationchange', function() {
+        scheduleViewportUpdate();
+        setTimeout(scheduleViewportUpdate, 250);
+      }, { passive: true });
+      if (window.visualViewport) window.visualViewport.addEventListener('resize', function() { scheduleViewportUpdate(); }, { passive: true });
+      if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', function() { scheduleViewportUpdate(); });
+      updateGameViewport();
 
       var pointerId = null;
       var cameraPointer = null, cameraX = 0, cameraY = 0;
