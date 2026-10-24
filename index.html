@@ -44,6 +44,8 @@
     #layout-panel label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
     #layout-panel label span { width: 62px; flex: none; }
     #layout-panel input[type=range] { flex: 1; min-width: 0; }
+    #layout-panel .lp-checks { display: flex; gap: 14px; margin: 6px 0; }
+    #layout-panel .lp-check { display: flex; align-items: center; gap: 6px; margin: 0; }
     #layout-panel .lp-row { display: flex; gap: 8px; margin-top: 8px; }
     #layout-panel button { flex: 1; padding: 8px 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.12); color: #fff; font: 600 12px Arial,sans-serif; }
     #layout-panel #lp-done { background: rgba(36,108,206,.85); }
@@ -87,6 +89,8 @@
     <div class="lp-hint">Arrastrá cualquier botón (también ⚙ y pantalla completa) para moverlo. Tocalo para cambiar su tamaño.</div>
     <label><span>Tamaño</span><input id="lp-size" type="range" min="0.5" max="2" step="0.05" value="1" disabled></label>
     <label><span>Opacidad</span><input id="lp-opacity" type="range" min="0.2" max="1" step="0.05" value="0.78"></label>
+    <label><span>Sens. cámara</span><input id="lp-cam" type="range" min="20" max="120" step="5" value="100"></label>
+    <div class="lp-checks"><label class="lp-check"><input id="lp-invert" type="checkbox"> Invertir giro</label><label class="lp-check"><input id="lp-vert" type="checkbox"> Cámara vertical</label></div>
     <div class="lp-row"><button id="lp-reset" type="button">Restablecer</button><button id="lp-done" type="button">Listo</button></div>
   </div>
   <script>
@@ -134,6 +138,7 @@
       var knob = document.getElementById('knob');
       var pressed = new Set();
       var editing = false;
+      var camCfg = { sens: 100, invert: false, vertical: false }; // paso en píxeles = 160 - sens
       var audioHint = document.getElementById('audio-hint');
       var screenHint = document.getElementById('screen-hint');
       var fullscreenToggle = document.getElementById('fullscreen-toggle');
@@ -299,16 +304,31 @@
       var cameraPointer = null, cameraX = 0, cameraY = 0;
       canvas.addEventListener('pointerdown', function(event) {
         if (event.pointerType !== 'touch') return;
-        cameraPointer = event.pointerId; cameraX = event.clientX; cameraY = event.clientY;
+        cameraPointer = event.pointerId; cameraX = event.clientX; cameraY = event.clientY; camAccX = 0; camAccY = 0;
         canvas.setPointerCapture(cameraPointer);
       });
+      // El juego solo tiene botones de cámara "digitales" (C izquierda/derecha...), sin giro libre.
+      // Por eso: cada tramo de arrastre (ver "Sens. cámara") equivale a UN toque de ese botón.
+      var camAccX = 0, camAccY = 0, camLastTap = 0;
+      function camTap(code) {
+        var now = performance.now();
+        if (now - camLastTap < 150) return false; // evita toques encimados
+        camLastTap = now;
+        keyEvent(code, true);
+        setTimeout(function() { keyEvent(code, false); }, 80);
+        return true;
+      }
       canvas.addEventListener('pointermove', function(event) {
         if (event.pointerId !== cameraPointer) return;
-        var dx = event.clientX - cameraX, dy = event.clientY - cameraY;
+        camAccX += event.clientX - cameraX; camAccY += event.clientY - cameraY;
         cameraX = event.clientX; cameraY = event.clientY;
-        var threshold = 7;
-        keyEvent('KeyA', dx < -threshold); keyEvent('KeyD', dx > threshold);
-        keyEvent('KeyW', dy < -threshold); keyEvent('KeyS', dy > threshold);
+        var step = Math.max(30, 160 - camCfg.sens);
+        if (Math.abs(camAccX) >= step) {
+          var right = camAccX > 0; if (camCfg.invert) right = !right;
+          if (camTap(right ? 'KeyD' : 'KeyA')) camAccX = 0; else camAccX = (camAccX > 0 ? 1 : -1) * step;
+        } else if (camCfg.vertical && Math.abs(camAccY) >= step) {
+          if (camTap(camAccY > 0 ? 'KeyS' : 'KeyW')) camAccY = 0; else camAccY = (camAccY > 0 ? 1 : -1) * step;
+        }
       });
       function endCamera(event) {
         if (event && event.pointerId !== cameraPointer) return;
@@ -377,12 +397,20 @@
       var nameLabel = document.getElementById('lp-name');
       var sizeInput = document.getElementById('lp-size');
       var opacityInput = document.getElementById('lp-opacity');
+      var camInput = document.getElementById('lp-cam');
+      var invertInput = document.getElementById('lp-invert');
+      var vertInput = document.getElementById('lp-vert');
       var layouts = {}, selected = null, editKey = null, dirty = false;
       try {
         var rawLayout = localStorage.getItem(LAYOUT_KEY);
         var parsedLayout = rawLayout && JSON.parse(rawLayout);
         if (parsedLayout && typeof parsedLayout === 'object') layouts = parsedLayout;
       } catch (error) { layouts = {}; }
+      if (layouts.cam && typeof layouts.cam === 'object') {
+        if (typeof layouts.cam.sens === 'number') camCfg.sens = Math.max(20, Math.min(120, layouts.cam.sens));
+        camCfg.invert = !!layouts.cam.invert; camCfg.vertical = !!layouts.cam.vertical;
+      }
+      function syncCamInputs() { camInput.value = camCfg.sens; invertInput.checked = camCfg.invert; vertInput.checked = camCfg.vertical; }
       function saveLayouts() { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layouts)); } catch (error) {} }
       function orientKey() { return matchMedia('(orientation: portrait)').matches ? 'port' : 'land'; }
       function clampNum(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -434,6 +462,7 @@
         touchRoot.classList.add('editing');
         layoutPanel.hidden = false;
         opacityInput.value = typeof layouts.opacity === 'number' ? layouts.opacity : 0.78;
+        syncCamInputs();
         materialize();
         selectControl(null);
       }
@@ -456,6 +485,7 @@
         delete layouts[editKey]; delete layouts.opacity; dirty = false;
         applyLayout(); materialize(); selectControl(null);
         opacityInput.value = 0.78;
+        camCfg.sens = 100; camCfg.invert = false; camCfg.vertical = false; delete layouts.cam; syncCamInputs();
         saveLayouts();
       });
       sizeInput.addEventListener('input', function() {
@@ -470,6 +500,11 @@
         touchRoot.style.opacity = layouts.opacity;
       });
       opacityInput.addEventListener('change', saveLayouts);
+      function saveCam() { layouts.cam = { sens: camCfg.sens, invert: camCfg.invert, vertical: camCfg.vertical }; saveLayouts(); }
+      camInput.addEventListener('input', function() { camCfg.sens = parseInt(camInput.value, 10) || 100; });
+      camInput.addEventListener('change', saveCam);
+      invertInput.addEventListener('change', function() { camCfg.invert = invertInput.checked; saveCam(); });
+      vertInput.addEventListener('change', function() { camCfg.vertical = vertInput.checked; saveCam(); });
       Object.keys(ctlEls).forEach(function(name) {
         var el = ctlEls[name], drag = null;
         el.addEventListener('pointerdown', function(event) {
