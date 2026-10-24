@@ -35,7 +35,7 @@
     #fullscreen-toggle:active { opacity: 1; transform: scale(.96); }
     #screen-hint { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100vw - 100px); padding: 9px 12px; border-radius: 999px; background: #000b; color: white; font: 13px/1.3 Arial,sans-serif; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #screen-hint.visible { opacity: .9; }
-    #layout-toggle { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 54px); width: 38px; height: 34px; border: 1px solid rgba(255,255,255,.5); border-radius: 10px; color: white; background: rgba(18,24,36,.5); font: 18px/1 Arial,sans-serif; opacity: .55; box-shadow: 0 2px 8px #0008; }
+    #layout-toggle { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 54px); width: 46px; height: 42px; border: 1px solid rgba(255,255,255,.65); border-radius: 12px; color: white; background: rgba(18,24,36,.58); font: 24px/1 Arial,sans-serif; opacity: .78; box-shadow: 0 2px 8px #0008; }
     #layout-toggle:active { opacity: 1; transform: scale(.96); }
     #layout-panel { position: fixed; z-index: 9; left: 50%; top: calc(var(--safe-top) + 8px); transform: translateX(-50%); width: min(330px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 14px; background: rgba(10,14,22,.9); color: #fff; font: 12px/1.35 Arial,sans-serif; box-shadow: 0 4px 16px #000a; touch-action: manipulation; }
     #layout-panel[hidden] { display: none; }
@@ -425,11 +425,17 @@
         sizeInput.disabled = !name;
         if (name) sizeInput.value = layouts[editKey][name].s;
       }
+      function setToggleIcon(open) {
+        layoutToggle.textContent = open ? '×' : '⚙';
+        layoutToggle.setAttribute('aria-label', open ? 'Cerrar editor de controles' : 'Editar controles');
+        layoutToggle.title = open ? 'Cerrar editor de controles' : 'Editar controles';
+      }
       function enterEdit() {
         releaseAll();
         editing = true; dirty = false; editKey = orientKey();
         touchRoot.classList.add('editing');
         layoutPanel.hidden = false;
+        setToggleIcon(true);
         opacityInput.value = typeof layouts.opacity === 'number' ? layouts.opacity : 0.78;
         materialize();
         selectControl(null);
@@ -439,6 +445,7 @@
         editing = false;
         touchRoot.classList.remove('editing');
         layoutPanel.hidden = true;
+        setToggleIcon(false);
         selectControl(null);
         if (!dirty && layouts[editKey]) { delete layouts[editKey]; }
         saveLayouts();
