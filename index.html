@@ -71,7 +71,7 @@
     // Pruebas de diagnóstico del recorte de diálogos (solo se activan con parámetros en la URL)
     (function patchGL() {
       var q = new URLSearchParams(location.search);
-      var noScissor = q.get('noscissor') === '1';
+      var noScissor = q.get('noscissor') !== '0';
       var logScissor = q.get('scissorlog') === '1';
       if (!noScissor && !logScissor) return;
       var SCISSOR_TEST = 0x0C11, logged = 0, seen = {};
@@ -200,7 +200,7 @@
       var baseGameAspect = 16 / 9;
       // Ajustes (se pueden probar desde la URL: ?maxAspect=2.2&width=1920)
       var params = new URLSearchParams(location.search);
-      var maxPanoramicAspect = Math.max(16 / 9, Math.min(parseFloat(params.get('maxAspect')) || 16 / 9, 21 / 9));
+      var maxPanoramicAspect = Math.max(16 / 9, Math.min(parseFloat(params.get('maxAspect')) || 3, 3));
       var fillMode = params.get('fill') || 'none'; // 'blur' (por defecto) o 'none' para negro
       (function setupFill() {
         if (fillMode !== 'blur' || !canvas.captureStream) return;
@@ -342,4 +342,3 @@
   <script async src="sm64.js"></script>
 </body>
 </html>
-
