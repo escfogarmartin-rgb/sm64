@@ -1,83 +1,192 @@
-<title>Click to Start!</title>
-<center><h1>SM<wbr>6<wbr>4-J<wbr>S - Su<wbr>p<wbr>er Ma<wbr>ri<wbr>o 6<wbr>4 made entirely out of J<wbr>av<wbr>aSc<wbr>rip<wbr>t and W<wbr>ebA<wbr>ss<wbr>e<wbr>mbl<wbr>y!</h1><h3>Mad<wbr>e by T<wbr>W<wbr>TG.</h3><hr></hr><p>Due to C<wbr>hr<wbr>om<wbr>e's S<wbr>t<wbr>u<wbr>p<wbr>i<wbr>d A<wbr>ud<wbr>io<wbr>/V<wbr>i<wbr>d<wbr>e<wbr>o A<wbr>ut<wbr>op<wbr>l<wbr>ay<wbr> P<wbr>ol<wbr>ic<wbr>y,<wbr> Cli<wbr>ck<wbr> t<wbr>he <wbr>pa<wbr>ge <wbr>to <wbr>st<wbr>art <wbr>th<wbr>e <wbr>g<wbr>a<wbr>me.</p></center>
-<script>
-  document.addEventListener('click', () => {
-<!--
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Super Mario 64</title>
+  <style>
+    :root { color-scheme: dark; --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-top: env(safe-area-inset-top, 0px); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+    body { position: fixed; inset: 0; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; }
+    #container { position: absolute; inset: 0; width: 100%; height: 100%; height: 100dvh; display: grid; place-items: center; background: #000; }
+    #canvas { display: block; width: 100%; height: 100%; touch-action: none; image-rendering: pixelated; outline: none; }
+    #touch-controls { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: .78; }
+    .control { pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+    #stick { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: calc(max(18px, var(--safe-bottom)) + 10px); width: clamp(112px, 26vw, 154px); aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,.45); background: rgba(24,32,48,.38); box-shadow: inset 0 0 0 9px rgba(255,255,255,.06); }
+    #stick::before { content: ""; position: absolute; inset: 28%; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; }
+    #knob { position: absolute; left: 50%; top: 50%; width: 40%; height: 40%; border-radius: 50%; background: rgba(245,248,255,.55); border: 2px solid rgba(255,255,255,.8); transform: translate(-50%,-50%); }
+    #actions { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(max(18px, var(--safe-bottom)) + 12px); width: clamp(142px, 34vw, 194px); height: 150px; }
+    .action { position: absolute; width: clamp(58px, 15vw, 76px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; color: white; font: 700 16px/1 Arial, sans-serif; border: 2px solid rgba(255,255,255,.65); background: rgba(38,52,72,.56); box-shadow: 0 3px 10px #0008, inset 0 0 10px #ffffff12; }
+    .action[data-key="KeyX"] { right: 0; bottom: 12px; width: clamp(70px, 18vw, 88px); background: rgba(36,108,206,.62); }
+    .action[data-key="KeyC"] { left: 0; bottom: 0; }
+    .action[data-key="Space"] { right: 54px; top: 0; width: 52px; font-size: 13px; }
+    .action[data-key="Enter"] { left: 50px; top: 32px; width: 42px; font-size: 10px; }
+    .action:active, .action.pressed { background: rgba(70,140,235,.82); transform: scale(.96); }
+    #audio-hint { position: fixed; top: calc(var(--safe-top) + 10px); left: 50%; z-index: 3; transform: translateX(-50%); padding: 7px 11px; border-radius: 999px; color: #fff; background: #0009; font: 12px/1.2 Arial,sans-serif; pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; }
+    #audio-hint.visible { opacity: .8; }
+    @media (orientation: portrait) {
+      #stick { width: clamp(118px, 31vw, 158px); }
+      #actions { width: clamp(150px, 39vw, 194px); }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+      #stick { width: min(25vh, 132px); left: max(12px, env(safe-area-inset-left)); bottom: calc(max(10px, var(--safe-bottom)) + 4px); }
+      #actions { height: 125px; right: max(12px, env(safe-area-inset-right)); bottom: calc(max(10px, var(--safe-bottom)) + 4px); }
+      .action[data-key="KeyX"] { bottom: 2px; }
+      .action[data-key="KeyC"] { bottom: 0; }
+      .action[data-key="Space"] { right: 48px; }
+      .action[data-key="Enter"] { left: 42px; top: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="container">
+    <canvas id="canvas" class="emscripten" width="1920" height="1080" tabindex="0"></canvas>
+  </main>
+  <div id="touch-controls" aria-label="Controles táctiles">
+    <div id="stick" class="control" role="application" aria-label="Joystick virtual"><div id="knob"></div></div>
+    <div id="actions">
+      <button class="control action" type="button" data-key="KeyX" aria-label="Saltar">A</button>
+      <button class="control action" type="button" data-key="KeyC" aria-label="Acción">B</button>
+      <button class="control action" type="button" data-key="Space" aria-label="Agacharse">Z</button>
+      <button class="control action" type="button" data-key="Enter" aria-label="Iniciar o pausar">START</button>
+    </div>
+  </div>
+  <div id="audio-hint" role="status">Tocá para activar el sonido</div>
+  <script>
+    var Module = {
+      preRun: [], postRun: [],
+      print: function(text) { console.log(text); },
+      printErr: function(text) { console.error(text); },
+      canvas: document.getElementById('canvas'),
+      setStatus: function() {}
+    };
+    (function () {
+      var canvas = Module.canvas;
+      canvas.addEventListener('webglcontextlost', function(event) {
+        alert('Se perdió el contexto gráfico. Recargá la página para continuar.');
+        event.preventDefault();
+      }, false);
+      var stick = document.getElementById('stick');
+      var knob = document.getElementById('knob');
+      var pressed = new Set();
+      var audioHint = document.getElementById('audio-hint');
+      var keyInfo = {
+        ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', keyCode: 38 },
+        ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 },
+        ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37 },
+        ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 },
+        KeyW: { key: 'w', code: 'KeyW', keyCode: 87 },
+        KeyA: { key: 'a', code: 'KeyA', keyCode: 65 },
+        KeyS: { key: 's', code: 'KeyS', keyCode: 83 },
+        KeyD: { key: 'd', code: 'KeyD', keyCode: 68 },
+        KeyX: { key: 'x', code: 'KeyX', keyCode: 88 },
+        KeyC: { key: 'c', code: 'KeyC', keyCode: 67 },
+        Space: { key: ' ', code: 'Space', keyCode: 32 },
+        Enter: { key: 'Enter', code: 'Enter', keyCode: 13 }
+      };
+      function keyEvent(code, down) {
+        var info = keyInfo[code];
+        if (!info || (down && pressed.has(code)) || (!down && !pressed.has(code))) return;
+        if (down) pressed.add(code); else pressed.delete(code);
+        canvas.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', {
+          key: info.key, code: info.code, keyCode: info.keyCode, which: info.keyCode,
+          bubbles: true, cancelable: true, repeat: false
+        }));
+      }
+      function releaseAll() {
+        Array.from(pressed).forEach(function(code) { keyEvent(code, false); });
+      }
+      function unlockAudio() {
+        var ctx = Module.SDL2 && Module.SDL2.audioContext;
+        if (!ctx || ctx.state !== 'suspended') return;
+        ctx.resume().then(function() { audioHint.classList.remove('visible'); })
+          .catch(function() { audioHint.classList.add('visible'); });
+        setTimeout(function() {
+          if (ctx.state === 'suspended') audioHint.classList.add('visible');
+        }, 700);
+      }
+      document.addEventListener('pointerdown', unlockAudio, { passive: true });
+      function resizeCanvas() {
+        var ratio = Math.min(window.devicePixelRatio || 1, 2);
+        var width = Math.max(1, Math.round(window.innerWidth * ratio));
+        var height = Math.max(1, Math.round(window.innerHeight * ratio));
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
+      }
+      window.addEventListener('resize', resizeCanvas, { passive: true });
+      window.addEventListener('orientationchange', function() { setTimeout(resizeCanvas, 250); }, { passive: true });
+      resizeCanvas();
 
-document.write( '<html lang=\"en-us\"><head>\n' );
-document.write( '    <meta charset=\"utf-8\">\n' );
-document.write( '    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n' );
-document.write( '    <title>Super Mario 64</title>\n' );
-document.write( '    <style>\n' );
-document.write( '      body, html{\n' );
-document.write( '        margin: 0;\n' );
-document.write( '        padding: 0;\n' );
-document.write( '        width: 100vw;\n' );
-document.write( '        min-height: 100vh;\n' );
-document.write( '        font-family: Arial, Helvetica, sans-serif;\n' );
-document.write( '        color: white;\n' );
-document.write( '        image-rendering: pixelated;\n' );
-document.write( '        scrollbar-width: none;\n' );
-document.write( '      }\n' );
-document.write( '      ::-webkit-scrollbar {\n' );
-document.write( '        display: none;\n' );
-document.write( '      }\n' );
-document.write( '      #container {\n' );
-document.write( '        width: 100vw;\n' );
-document.write( '        height: 100vh;\n' );
-document.write( '        display: flex;\n' );
-document.write( '        align-items: center;\n' );
-document.write( '        justify-content: center;\n' );
-document.write( '      }\n' );
-document.write( '      canvas {\n' );
-document.write( '        width: 100vw;\n' );
-document.write( '        height: 100vh;\n' );
-document.write( '      }\n' );
-document.write( '    </style>\n' );
-document.write( '  </head>\n' );
-document.write( '  <body>\n' );
-document.write( '    <div id=\"container\">\n' );
-document.write( '      <canvas class=\"emscripten\" id=\"canvas\" width=\"1920\" height=\"1080\" style=\"cursor: default;\"></canvas>\n' );
-document.write( '    </div>\n' );
-document.write( '    <script type=\"text/javascript\">\n' );
-document.write( '      var Module = {\n' );
-document.write( '        preRun: [],\n' );
-document.write( '        postRun: [],\n' );
-document.write( '        print: (function() {\n' );
-document.write( '          return function(text) {\n' );
-document.write( '            if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(\' \');\n' );
-document.write( '            console.log(text);\n' );
-document.write( '          };\n' );
-document.write( '        })(),\n' );
-document.write( '        printErr: function(text) {\n' );
-document.write( '          if (arguments.length > 1)\n' );
-document.write( '            text = Array.prototype.slice.call(arguments).join(\' \');\n' );
-document.write( '          console.error(text);\n' );
-document.write( '        },\n' );
-document.write( '        canvas: (function() {\n' );
-document.write( '          var canvas = document.getElementById(\'canvas\');\n' );
-document.write( '          canvas.width = window.innerWidth; // Todo: how to do this from c++\n' );
-document.write( '          canvas.height = window.innerHeight;\n' );
-document.write( '          canvas.addEventListener(\"webglcontextlost\", function(e) {\n' );
-document.write( '            alert(\'WebGL context lost. You will need to reload the page.\');\n' );
-document.write( '            e.preventDefault();\n' );
-document.write( '          }, false);\n' );
-document.write( '          return canvas;\n' );
-document.write( '        })(),\n' );
-document.write( '        setStatus: function(text) {\n' );
-document.write( '        }\n' );
-document.write( '      };\n' );
-document.write( '    </script>\n' );
-document.write( '    <script async=\"\" type=\"text/javascript\" src=\"sm64.js\"></script>\n' );
-document.write( '    <script>\n' );
-document.write( '    </script>\n' );
-document.write( '  \n' );
-document.write( '\n' );
-document.write( '\n' );
-document.write( '\n' );
-document.write( '\n' );
-document.write( '</body></html>' );
-
-//-->
-  })
-</script>
+      var pointerId = null;
+      var cameraPointer = null, cameraX = 0, cameraY = 0;
+      canvas.addEventListener('pointerdown', function(event) {
+        if (event.pointerType !== 'touch') return;
+        cameraPointer = event.pointerId; cameraX = event.clientX; cameraY = event.clientY;
+        canvas.setPointerCapture(cameraPointer);
+      });
+      canvas.addEventListener('pointermove', function(event) {
+        if (event.pointerId !== cameraPointer) return;
+        var dx = event.clientX - cameraX, dy = event.clientY - cameraY;
+        cameraX = event.clientX; cameraY = event.clientY;
+        var threshold = 7;
+        keyEvent('KeyA', dx < -threshold); keyEvent('KeyD', dx > threshold);
+        keyEvent('KeyW', dy < -threshold); keyEvent('KeyS', dy > threshold);
+      });
+      function endCamera(event) {
+        if (event && event.pointerId !== cameraPointer) return;
+        cameraPointer = null;
+        keyEvent('KeyW', false); keyEvent('KeyA', false);
+        keyEvent('KeyS', false); keyEvent('KeyD', false);
+      }
+      canvas.addEventListener('pointerup', endCamera);
+      canvas.addEventListener('pointercancel', endCamera);
+      function moveStick(event) {
+        var rect = stick.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        var dx = event.clientX - cx, dy = event.clientY - cy;
+        var max = rect.width * .32, length = Math.hypot(dx, dy);
+        if (length > max) { dx = dx / length * max; dy = dy / length * max; }
+        knob.style.left = (50 + dx / rect.width * 100) + '%';
+        knob.style.top = (50 + dy / rect.height * 100) + '%';
+        var nx = dx / max, ny = dy / max, dead = .22;
+        keyEvent('ArrowLeft', nx < -dead); keyEvent('ArrowRight', nx > dead);
+        keyEvent('ArrowUp', ny < -dead); keyEvent('ArrowDown', ny > dead);
+      }
+      function resetStick() {
+        pointerId = null;
+        keyEvent('ArrowUp', false); keyEvent('ArrowLeft', false);
+        keyEvent('ArrowDown', false); keyEvent('ArrowRight', false);
+        knob.style.left = '50%'; knob.style.top = '50%';
+      }
+      stick.addEventListener('pointerdown', function(event) {
+        event.preventDefault(); unlockAudio(); pointerId = event.pointerId;
+        stick.setPointerCapture(pointerId); moveStick(event);
+      });
+      stick.addEventListener('pointermove', function(event) {
+        if (event.pointerId === pointerId) { event.preventDefault(); moveStick(event); }
+      });
+      stick.addEventListener('pointerup', function(event) { if (event.pointerId === pointerId) resetStick(); });
+      stick.addEventListener('pointercancel', resetStick);
+      document.querySelectorAll('.action').forEach(function(button) {
+        var code = button.dataset.key;
+        button.addEventListener('pointerdown', function(event) {
+          event.preventDefault(); unlockAudio();
+          button.setPointerCapture(event.pointerId); keyEvent(code, true); button.classList.add('pressed');
+        });
+        function release(event) {
+          if (event) event.preventDefault();
+          keyEvent(code, false); button.classList.remove('pressed');
+        }
+        button.addEventListener('pointerup', release);
+        button.addEventListener('pointercancel', release);
+        button.addEventListener('lostpointercapture', release);
+      });
+      window.addEventListener('blur', releaseAll);
+      document.addEventListener('visibilitychange', function() { if (document.hidden) releaseAll(); });
+    })();
+  </script>
+  <script async src="sm64.js"></script>
+</body>
+</html>
