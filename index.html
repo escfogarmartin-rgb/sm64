@@ -35,6 +35,20 @@
     #fullscreen-toggle:active { opacity: 1; transform: scale(.96); }
     #screen-hint { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100vw - 100px); padding: 9px 12px; border-radius: 999px; background: #000b; color: white; font: 13px/1.3 Arial,sans-serif; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #screen-hint.visible { opacity: .9; }
+    #layout-toggle { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 54px); width: 38px; height: 34px; border: 1px solid rgba(255,255,255,.5); border-radius: 10px; color: white; background: rgba(18,24,36,.5); font: 18px/1 Arial,sans-serif; opacity: .55; box-shadow: 0 2px 8px #0008; }
+    #layout-toggle:active { opacity: 1; transform: scale(.96); }
+    #layout-panel { position: fixed; z-index: 9; left: 50%; top: calc(var(--safe-top) + 8px); transform: translateX(-50%); width: min(330px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 14px; background: rgba(10,14,22,.9); color: #fff; font: 12px/1.35 Arial,sans-serif; box-shadow: 0 4px 16px #000a; touch-action: manipulation; }
+    #layout-panel[hidden] { display: none; }
+    #layout-panel .lp-title { font-weight: 700; font-size: 13px; }
+    #layout-panel .lp-hint { opacity: .75; margin: 2px 0 6px; }
+    #layout-panel label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    #layout-panel label span { width: 62px; flex: none; }
+    #layout-panel input[type=range] { flex: 1; min-width: 0; }
+    #layout-panel .lp-row { display: flex; gap: 8px; margin-top: 8px; }
+    #layout-panel button { flex: 1; padding: 8px 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.12); color: #fff; font: 600 12px Arial,sans-serif; }
+    #layout-panel #lp-done { background: rgba(36,108,206,.85); }
+    #touch-controls.editing .control { outline: 2px dashed rgba(255,255,255,.75); outline-offset: 2px; }
+    #touch-controls.editing .control.selected { outline: 3px solid #ffd54a; outline-offset: 2px; }
     @media (orientation: portrait) {
       #stick { width: clamp(118px, 31vw, 158px); }
       #actions { width: clamp(150px, 39vw, 194px); }
@@ -67,6 +81,14 @@
   <div id="audio-hint" role="status">Tocá para activar el sonido</div>
   <button id="fullscreen-toggle" class="control" type="button" aria-label="Activar pantalla completa" title="Pantalla completa">⛶</button>
   <div id="screen-hint" role="status"></div>
+  <button id="layout-toggle" class="control" type="button" aria-label="Editar controles" title="Editar controles">⚙</button>
+  <div id="layout-panel" hidden>
+    <div class="lp-title">Editar controles: <span id="lp-name">tocá uno</span></div>
+    <div class="lp-hint">Arrastrá un botón para moverlo. Tocalo para cambiar su tamaño.</div>
+    <label><span>Tamaño</span><input id="lp-size" type="range" min="0.5" max="2" step="0.05" value="1" disabled></label>
+    <label><span>Opacidad</span><input id="lp-opacity" type="range" min="0.2" max="1" step="0.05" value="0.78"></label>
+    <div class="lp-row"><button id="lp-reset" type="button">Restablecer</button><button id="lp-done" type="button">Listo</button></div>
+  </div>
   <script>
     // Pruebas de diagnóstico del recorte de diálogos (solo se activan con parámetros en la URL)
     (function patchGL() {
@@ -111,6 +133,7 @@
       var stick = document.getElementById('stick');
       var knob = document.getElementById('knob');
       var pressed = new Set();
+      var editing = false;
       var audioHint = document.getElementById('audio-hint');
       var screenHint = document.getElementById('screen-hint');
       var fullscreenToggle = document.getElementById('fullscreen-toggle');
@@ -130,7 +153,7 @@
       };
       function keyEvent(code, down) {
         var info = keyInfo[code];
-        if (!info || (down && pressed.has(code)) || (!down && !pressed.has(code))) return;
+        if (!info || editing || (down && pressed.has(code)) || (!down && !pressed.has(code))) return;
         if (down) pressed.add(code); else pressed.delete(code);
         canvas.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', {
           key: info.key, code: info.code, keyCode: info.keyCode, which: info.keyCode,
@@ -335,6 +358,154 @@
         button.addEventListener('pointercancel', release);
         button.addEventListener('lostpointercapture', release);
       });
+      // ---- Editor de controles táctiles (posición, tamaño y opacidad; se guarda en este navegador) ----
+      var LAYOUT_KEY = 'sm64-touch-layout-v1';
+      var ctlEls = {
+        stick: stick,
+        KeyX: document.querySelector('.action[data-key="KeyX"]'),
+        KeyC: document.querySelector('.action[data-key="KeyC"]'),
+        Space: document.querySelector('.action[data-key="Space"]'),
+        Enter: document.querySelector('.action[data-key="Enter"]')
+      };
+      var ctlNames = { stick: 'Joystick', KeyX: 'A', KeyC: 'B', Space: 'Z', Enter: 'START' };
+      var touchRoot = document.getElementById('touch-controls');
+      var layoutPanel = document.getElementById('layout-panel');
+      var layoutToggle = document.getElementById('layout-toggle');
+      var nameLabel = document.getElementById('lp-name');
+      var sizeInput = document.getElementById('lp-size');
+      var opacityInput = document.getElementById('lp-opacity');
+      var layouts = {}, selected = null, editKey = null, dirty = false;
+      try {
+        var rawLayout = localStorage.getItem(LAYOUT_KEY);
+        var parsedLayout = rawLayout && JSON.parse(rawLayout);
+        if (parsedLayout && typeof parsedLayout === 'object') layouts = parsedLayout;
+      } catch (error) { layouts = {}; }
+      function saveLayouts() { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layouts)); } catch (error) {} }
+      function orientKey() { return matchMedia('(orientation: portrait)').matches ? 'port' : 'land'; }
+      function clampNum(v, a, b) { return Math.max(a, Math.min(b, v)); }
+      function round1(n) { return Math.round(n * 10) / 10; }
+      function viewW() { return document.documentElement.clientWidth || window.innerWidth; }
+      function viewH() { return document.documentElement.clientHeight || window.innerHeight; }
+      function clearControl(name) {
+        var el = ctlEls[name];
+        ['position', 'left', 'top', 'right', 'bottom', 'translate', 'scale'].forEach(function(p) { el.style.removeProperty(p); });
+      }
+      function applyControl(name, d) {
+        var el = ctlEls[name];
+        el.style.setProperty('position', 'fixed');
+        el.style.setProperty('left', d.x + '%');
+        el.style.setProperty('top', d.y + '%');
+        el.style.setProperty('right', 'auto');
+        el.style.setProperty('bottom', 'auto');
+        el.style.setProperty('translate', '-50% -50%');
+        el.style.setProperty('scale', String(d.s));
+      }
+      function applyLayout() {
+        var set = layouts[orientKey()];
+        Object.keys(ctlEls).forEach(function(name) {
+          if (set && set[name]) applyControl(name, set[name]); else clearControl(name);
+        });
+        if (typeof layouts.opacity === 'number') touchRoot.style.opacity = layouts.opacity;
+        else touchRoot.style.removeProperty('opacity');
+      }
+      function materialize() {
+        var set = layouts[editKey] || (layouts[editKey] = {});
+        var vw = viewW(), vh = viewH(), fresh = {};
+        Object.keys(ctlEls).forEach(function(name) {
+          if (set[name]) return;
+          var r = ctlEls[name].getBoundingClientRect();
+          fresh[name] = { x: round1((r.left + r.width / 2) / vw * 100), y: round1((r.top + r.height / 2) / vh * 100), s: 1 };
+        });
+        Object.keys(fresh).forEach(function(name) { set[name] = fresh[name]; applyControl(name, set[name]); });
+      }
+      function selectControl(name) {
+        selected = name;
+        Object.keys(ctlEls).forEach(function(n) { ctlEls[n].classList.toggle('selected', n === name); });
+        nameLabel.textContent = name ? ctlNames[name] : 'tocá uno';
+        sizeInput.disabled = !name;
+        if (name) sizeInput.value = layouts[editKey][name].s;
+      }
+      function enterEdit() {
+        releaseAll();
+        editing = true; dirty = false; editKey = orientKey();
+        touchRoot.classList.add('editing');
+        layoutPanel.hidden = false;
+        opacityInput.value = typeof layouts.opacity === 'number' ? layouts.opacity : 0.78;
+        materialize();
+        selectControl(null);
+      }
+      function exitEdit() {
+        if (!editing) return;
+        editing = false;
+        touchRoot.classList.remove('editing');
+        layoutPanel.hidden = true;
+        selectControl(null);
+        if (!dirty && layouts[editKey]) { delete layouts[editKey]; }
+        saveLayouts();
+        applyLayout();
+      }
+      layoutToggle.addEventListener('click', function() { if (editing) exitEdit(); else enterEdit(); });
+      document.getElementById('lp-done').addEventListener('click', exitEdit);
+      document.getElementById('lp-reset').addEventListener('click', function() {
+        delete layouts[editKey]; delete layouts.opacity; dirty = false;
+        applyLayout(); materialize(); selectControl(null);
+        opacityInput.value = 0.78;
+        saveLayouts();
+      });
+      sizeInput.addEventListener('input', function() {
+        if (!selected) return;
+        var d = layouts[editKey][selected];
+        d.s = parseFloat(sizeInput.value) || 1; dirty = true;
+        applyControl(selected, d);
+      });
+      sizeInput.addEventListener('change', saveLayouts);
+      opacityInput.addEventListener('input', function() {
+        layouts.opacity = parseFloat(opacityInput.value) || 0.78; dirty = true;
+        touchRoot.style.opacity = layouts.opacity;
+      });
+      opacityInput.addEventListener('change', saveLayouts);
+      Object.keys(ctlEls).forEach(function(name) {
+        var el = ctlEls[name], drag = null;
+        el.addEventListener('pointerdown', function(event) {
+          if (!editing) return;
+          event.preventDefault(); event.stopImmediatePropagation();
+          selectControl(name);
+          var d = layouts[editKey][name];
+          drag = { id: event.pointerId, px: event.clientX, py: event.clientY, x: d.x, y: d.y };
+          try { el.setPointerCapture(event.pointerId); } catch (error) {}
+        }, true);
+        el.addEventListener('pointermove', function(event) {
+          if (!editing) return;
+          event.stopImmediatePropagation();
+          if (!drag || event.pointerId !== drag.id) return;
+          event.preventDefault();
+          var d = layouts[editKey][name];
+          d.x = round1(clampNum(drag.x + (event.clientX - drag.px) / viewW() * 100, 2, 98));
+          d.y = round1(clampNum(drag.y + (event.clientY - drag.py) / viewH() * 100, 3, 97));
+          dirty = true;
+          applyControl(name, d);
+        }, true);
+        function endDrag(event) {
+          if (!editing) return;
+          event.stopImmediatePropagation();
+          if (!drag || event.pointerId !== drag.id) return;
+          drag = null; saveLayouts();
+        }
+        el.addEventListener('pointerup', endDrag, true);
+        el.addEventListener('pointercancel', endDrag, true);
+      });
+      var lastOrient = orientKey();
+      function onOrientationChange() {
+        var key = orientKey();
+        if (key === lastOrient) return;
+        if (editing) exitEdit();
+        lastOrient = key;
+        applyLayout();
+      }
+      window.addEventListener('resize', onOrientationChange, { passive: true });
+      window.addEventListener('orientationchange', function() { setTimeout(onOrientationChange, 50); }, { passive: true });
+      applyLayout();
+
       window.addEventListener('blur', releaseAll);
       document.addEventListener('visibilitychange', function() { if (document.hidden) releaseAll(); });
     })();
