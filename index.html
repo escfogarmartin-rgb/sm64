@@ -169,10 +169,15 @@
       document.addEventListener('fullscreenchange', handleFullscreenChange);
       document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
       var baseGameAspect = 16 / 9;
-      var maxPanoramicAspect = 21 / 9; // ya no se usa: el juego se dibuja siempre en 16:9
-      var RENDER_WIDTH = 1920; // resolución interna fija (si va lento en el celu, probá 1280)
+      // Ajustes (se pueden probar desde la URL: ?maxAspect=2.2&width=1920)
+      var params = new URLSearchParams(location.search);
+      var maxPanoramicAspect = Math.max(16 / 9, Math.min(parseFloat(params.get('maxAspect')) || 16 / 9, 21 / 9));
+      var RENDER_WIDTH = Math.max(640, Math.min(parseInt(params.get('width'), 10) || 1920, 2560)); // si va lento en el celu, probá width=1280
       function targetGameAspect(safeWidth, safeHeight) {
-        return baseGameAspect;
+        if (safeWidth <= safeHeight || safeHeight <= 0) return baseGameAspect;
+        var availableAspect = safeWidth / safeHeight;
+        if (availableAspect <= baseGameAspect) return baseGameAspect;
+        return Math.min(availableAspect, maxPanoramicAspect);
       }
       function resizeCanvasBuffer(width, height) {
         var initialized = !!(Module.ctx || canvas.GLctxObject);
@@ -195,7 +200,7 @@
         var displayWidth = Math.max(0, Math.min(safeWidth, safeHeight * aspect));
         var displayHeight = displayWidth / aspect;
         var renderWidth = RENDER_WIDTH;
-        var renderHeight = Math.round(RENDER_WIDTH / baseGameAspect);
+        var renderHeight = Math.round(RENDER_WIDTH / aspect);
         if (displayWidth > 0 && (canvas.width !== renderWidth || canvas.height !== renderHeight)) {
           try {
             resizeCanvasBuffer(renderWidth, renderHeight);
