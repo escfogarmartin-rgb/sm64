@@ -26,6 +26,10 @@
     .action:active, .action.pressed { background: rgba(70,140,235,.82); transform: scale(.96); }
     #audio-hint { position: fixed; top: calc(var(--safe-top) + 10px); left: 50%; z-index: 3; transform: translateX(-50%); padding: 7px 11px; border-radius: 999px; color: #fff; background: #0009; font: 12px/1.2 Arial,sans-serif; pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; }
     #audio-hint.visible { opacity: .8; }
+    #fullscreen-toggle { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 46px; height: 42px; border: 1px solid rgba(255,255,255,.65); border-radius: 12px; color: white; background: rgba(18,24,36,.58); font: 26px/1 Arial,sans-serif; opacity: .78; box-shadow: 0 2px 8px #0008; }
+    #fullscreen-toggle:active { opacity: 1; transform: scale(.96); }
+    #screen-hint { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100vw - 100px); padding: 9px 12px; border-radius: 999px; background: #000b; color: white; font: 13px/1.3 Arial,sans-serif; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
+    #screen-hint.visible { opacity: .9; }
     @media (orientation: portrait) {
       #stick { width: clamp(118px, 31vw, 158px); }
       #actions { width: clamp(150px, 39vw, 194px); }
@@ -54,6 +58,8 @@
     </div>
   </div>
   <div id="audio-hint" role="status">Tocá para activar el sonido</div>
+  <button id="fullscreen-toggle" class="control" type="button" aria-label="Activar pantalla completa" title="Pantalla completa">⛶</button>
+  <div id="screen-hint" role="status"></div>
   <script>
     var Module = {
       preRun: [], postRun: [],
@@ -72,6 +78,8 @@
       var knob = document.getElementById('knob');
       var pressed = new Set();
       var audioHint = document.getElementById('audio-hint');
+      var screenHint = document.getElementById('screen-hint');
+      var fullscreenToggle = document.getElementById('fullscreen-toggle');
       var keyInfo = {
         ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', keyCode: 38 },
         ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 },
@@ -108,6 +116,48 @@
         }, 700);
       }
       document.addEventListener('pointerdown', unlockAudio, { passive: true });
+      function showScreenHint(message) {
+        screenHint.textContent = message;
+        screenHint.classList.add('visible');
+        clearTimeout(showScreenHint.timer);
+        showScreenHint.timer = setTimeout(function() { screenHint.classList.remove('visible'); }, 2600);
+      }
+      function isFullscreen() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen);
+      }
+      function updateFullscreenButton() {
+        var active = isFullscreen();
+        fullscreenToggle.textContent = active ? '×' : '⛶';
+        fullscreenToggle.setAttribute('aria-label', active ? 'Salir de pantalla completa' : 'Activar pantalla completa');
+        fullscreenToggle.title = active ? 'Salir de pantalla completa' : 'Pantalla completa';
+      }
+      fullscreenToggle.addEventListener('click', async function() {
+        if (isFullscreen()) {
+          try {
+            if (document.exitFullscreen) await document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+          } catch (error) { showScreenHint('No se pudo salir de pantalla completa.'); }
+          return;
+        }
+        try {
+          var enter = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+          if (!enter) throw new Error('Fullscreen API unavailable');
+          try { await enter.call(document.documentElement, { navigationUI: 'hide' }); }
+          catch (error) { await enter.call(document.documentElement); }
+          updateFullscreenButton();
+          if (screen.orientation && screen.orientation.lock) {
+            try { await screen.orientation.lock('landscape'); }
+            catch (error) { showScreenHint('Pantalla completa activada. Si no gira, poné el teléfono en horizontal.'); }
+          } else if (matchMedia('(orientation: portrait)').matches) {
+            showScreenHint('Pantalla completa activada. Poné el teléfono en horizontal para jugar.');
+          }
+        } catch (error) {
+          showScreenHint('Este navegador no permitió la pantalla completa.');
+        }
+      });
+      document.addEventListener('fullscreenchange', updateFullscreenButton);
+      document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
       function resizeCanvas() {
         var ratio = Math.min(window.devicePixelRatio || 1, 2);
         var width = Math.max(1, Math.round(window.innerWidth * ratio));
