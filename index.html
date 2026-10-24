@@ -35,7 +35,7 @@
     #fullscreen-toggle:active { opacity: 1; transform: scale(.96); }
     #screen-hint { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100vw - 100px); padding: 9px 12px; border-radius: 999px; background: #000b; color: white; font: 13px/1.3 Arial,sans-serif; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #screen-hint.visible { opacity: .9; }
-    #layout-toggle { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 54px); width: 46px; height: 42px; border: 1px solid rgba(255,255,255,.65); border-radius: 12px; color: white; background: rgba(18,24,36,.58); font: 24px/1 Arial,sans-serif; opacity: .78; box-shadow: 0 2px 8px #0008; }
+    #layout-toggle { position: fixed; z-index: 5; top: calc(max(12px, env(safe-area-inset-top)) + 50px); right: max(12px, env(safe-area-inset-right)); width: 46px; height: 42px; border: 1px solid rgba(255,255,255,.65); border-radius: 12px; color: white; background: rgba(18,24,36,.58); font: 24px/1 Arial,sans-serif; opacity: .78; box-shadow: 0 2px 8px #0008; }
     #layout-toggle:active { opacity: 1; transform: scale(.96); }
     #layout-panel { position: fixed; z-index: 9; left: 50%; top: calc(var(--safe-top) + 8px); transform: translateX(-50%); width: min(330px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 14px; background: rgba(10,14,22,.9); color: #fff; font: 12px/1.35 Arial,sans-serif; box-shadow: 0 4px 16px #000a; touch-action: manipulation; }
     #layout-panel[hidden] { display: none; }
@@ -84,7 +84,7 @@
   <button id="layout-toggle" class="control" type="button" aria-label="Editar controles" title="Editar controles">⚙</button>
   <div id="layout-panel" hidden>
     <div class="lp-title">Editar controles: <span id="lp-name">tocá uno</span></div>
-    <div class="lp-hint">Arrastrá un botón para moverlo. Tocalo para cambiar su tamaño.</div>
+    <div class="lp-hint">Arrastrá cualquier botón (también ⚙ y pantalla completa) para moverlo. Tocalo para cambiar su tamaño.</div>
     <label><span>Tamaño</span><input id="lp-size" type="range" min="0.5" max="2" step="0.05" value="1" disabled></label>
     <label><span>Opacidad</span><input id="lp-opacity" type="range" min="0.2" max="1" step="0.05" value="0.78"></label>
     <div class="lp-row"><button id="lp-reset" type="button">Restablecer</button><button id="lp-done" type="button">Listo</button></div>
@@ -189,6 +189,7 @@
         fullscreenToggle.title = active ? 'Salir de pantalla completa' : 'Pantalla completa';
       }
       fullscreenToggle.addEventListener('click', async function() {
+        if (editing) return;
         if (isFullscreen()) {
           try {
             if (document.exitFullscreen) await document.exitFullscreen();
@@ -365,9 +366,11 @@
         KeyX: document.querySelector('.action[data-key="KeyX"]'),
         KeyC: document.querySelector('.action[data-key="KeyC"]'),
         Space: document.querySelector('.action[data-key="Space"]'),
-        Enter: document.querySelector('.action[data-key="Enter"]')
+        Enter: document.querySelector('.action[data-key="Enter"]'),
+        fs: document.getElementById('fullscreen-toggle'),
+        gear: document.getElementById('layout-toggle')
       };
-      var ctlNames = { stick: 'Joystick', KeyX: 'A', KeyC: 'B', Space: 'Z', Enter: 'START' };
+      var ctlNames = { stick: 'Joystick', KeyX: 'A', KeyC: 'B', Space: 'Z', Enter: 'START', fs: 'Pantalla completa', gear: 'Engranaje' };
       var touchRoot = document.getElementById('touch-controls');
       var layoutPanel = document.getElementById('layout-panel');
       var layoutToggle = document.getElementById('layout-toggle');
@@ -425,17 +428,11 @@
         sizeInput.disabled = !name;
         if (name) sizeInput.value = layouts[editKey][name].s;
       }
-      function setToggleIcon(open) {
-        layoutToggle.textContent = open ? '×' : '⚙';
-        layoutToggle.setAttribute('aria-label', open ? 'Cerrar editor de controles' : 'Editar controles');
-        layoutToggle.title = open ? 'Cerrar editor de controles' : 'Editar controles';
-      }
       function enterEdit() {
         releaseAll();
         editing = true; dirty = false; editKey = orientKey();
         touchRoot.classList.add('editing');
         layoutPanel.hidden = false;
-        setToggleIcon(true);
         opacityInput.value = typeof layouts.opacity === 'number' ? layouts.opacity : 0.78;
         materialize();
         selectControl(null);
@@ -445,13 +442,15 @@
         editing = false;
         touchRoot.classList.remove('editing');
         layoutPanel.hidden = true;
-        setToggleIcon(false);
         selectControl(null);
         if (!dirty && layouts[editKey]) { delete layouts[editKey]; }
         saveLayouts();
         applyLayout();
       }
-      layoutToggle.addEventListener('click', function() { if (editing) exitEdit(); else enterEdit(); });
+      layoutToggle.addEventListener('click', function(event) {
+        if (editing) { event.preventDefault(); return; }
+        enterEdit();
+      });
       document.getElementById('lp-done').addEventListener('click', exitEdit);
       document.getElementById('lp-reset').addEventListener('click', function() {
         delete layouts[editKey]; delete layouts.opacity; dirty = false;
