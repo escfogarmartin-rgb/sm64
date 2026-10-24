@@ -11,6 +11,10 @@
     html, body { margin: 0; width: 100%; height: 100%; min-height: 100%; background: #000; }
     body { min-height: 100vh; min-height: 100dvh; }
     #container { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); display: grid; place-items: center; background: #000; }
+    #bg-fill { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; pointer-events: none; display: none; filter: blur(28px) brightness(.75) saturate(1.1); transform: scale(1.15); }
+    html.fill-blur #bg-fill { display: block; }
+    html.fill-blur #container { background: transparent; }
+    #container { z-index: 1; }
     #game-frame { position: relative; max-width: 100%; max-height: 100%; }
     #canvas { display: block; width: 100%; height: 100%; touch-action: none; -webkit-user-select: none; user-select: none; image-rendering: pixelated; outline: none; }
     #touch-controls { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: .78; }
@@ -47,6 +51,7 @@
   </style>
 </head>
 <body>
+  <video id="bg-fill" muted playsinline autoplay aria-hidden="true"></video>
   <main id="container">
     <div id="game-frame"><canvas id="canvas" class="emscripten" width="1920" height="1080" tabindex="0"></canvas></div>
   </main>
@@ -63,6 +68,30 @@
   <button id="fullscreen-toggle" class="control" type="button" aria-label="Activar pantalla completa" title="Pantalla completa">⛶</button>
   <div id="screen-hint" role="status"></div>
   <script>
+    // Pruebas de diagnóstico del recorte de diálogos (solo se activan con parámetros en la URL)
+    (function patchGL() {
+      var q = new URLSearchParams(location.search);
+      var noScissor = q.get('noscissor') === '1';
+      var logScissor = q.get('scissorlog') === '1';
+      if (!noScissor && !logScissor) return;
+      var SCISSOR_TEST = 0x0C11, logged = 0, seen = {};
+      [window.WebGLRenderingContext, window.WebGL2RenderingContext].forEach(function(C) {
+        if (!C) return;
+        var p = C.prototype, origEnable = p.enable, origScissor = p.scissor;
+        p.enable = function(cap) {
+          if (noScissor && cap === SCISSOR_TEST) return;
+          return origEnable.call(this, cap);
+        };
+        p.scissor = function(x, y, w, h) {
+          if (logScissor && logged < 40) {
+            var k = [x, y, w, h, this.drawingBufferWidth, this.drawingBufferHeight].join(',');
+            if (!seen[k]) { seen[k] = 1; logged++; console.log('[scissor] x,y,w,h,bufW,bufH = ' + k); }
+          }
+          if (noScissor) return;
+          return origScissor.call(this, x, y, w, h);
+        };
+      });
+    })();
     var Module = {
       preRun: [], postRun: [],
       print: function(text) { console.log(text); },
@@ -172,6 +201,16 @@
       // Ajustes (se pueden probar desde la URL: ?maxAspect=2.2&width=1920)
       var params = new URLSearchParams(location.search);
       var maxPanoramicAspect = Math.max(16 / 9, Math.min(parseFloat(params.get('maxAspect')) || 16 / 9, 21 / 9));
+      var fillMode = params.get('fill') || 'none'; // 'blur' (por defecto) o 'none' para negro
+      (function setupFill() {
+        if (fillMode !== 'blur' || !canvas.captureStream) return;
+        try {
+          var bg = document.getElementById('bg-fill');
+          bg.srcObject = canvas.captureStream(30);
+          document.documentElement.classList.add('fill-blur');
+          var p = bg.play(); if (p && p.catch) p.catch(function() {});
+        } catch (error) { document.documentElement.classList.remove('fill-blur'); }
+      })();
       var RENDER_WIDTH = Math.max(640, Math.min(parseInt(params.get('width'), 10) || 1920, 2560)); // si va lento en el celu, probá width=1280
       function targetGameAspect(safeWidth, safeHeight) {
         if (safeWidth <= safeHeight || safeHeight <= 0) return baseGameAspect;
@@ -303,3 +342,4 @@
   <script async src="sm64.js"></script>
 </body>
 </html>
+
